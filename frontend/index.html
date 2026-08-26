@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>H2S Worker Safety Monitor</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #0f172a;
+            color: white;
+        }
+
+        header {
+            background: #111827;
+            padding: 20px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+
+        .online {
+            color: #22c55e;
+            font-weight: bold;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: auto;
+            padding: 30px;
+        }
+
+        .worker {
+            margin-bottom: 20px;
+            color: #94a3b8;
+        }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+        }
+
+        .card {
+            background: #1e293b;
+            padding: 25px;
+            border-radius: 15px;
+        }
+
+        .card h3 {
+            margin-top: 0;
+            color: #94a3b8;
+        }
+
+        .big-value {
+            font-size: 42px;
+            font-weight: bold;
+        }
+
+        .small-value {
+            font-size: 25px;
+            font-weight: bold;
+        }
+
+        .risk-card {
+            text-align: center;
+        }
+
+        #risk {
+            font-size: 42px;
+            font-weight: bold;
+        }
+
+        .safe {
+            color: #22c55e;
+        }
+
+        .warning {
+            color: #facc15;
+        }
+
+        .danger {
+            color: #ef4444;
+        }
+
+        .details {
+            margin-top: 20px;
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+        }
+
+        .detail-card {
+            background: #1e293b;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .detail-card p {
+            color: #94a3b8;
+        }
+
+        .status-box {
+            margin-top: 25px;
+            background: #1e293b;
+            padding: 20px;
+            border-radius: 12px;
+        }
+
+        .status-box p {
+            margin: 8px 0;
+        }
+
+        @media(max-width: 700px) {
+
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .details {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <header>
+
+        <h1>H₂S Worker Safety Monitor</h1>
+
+        <div id="connection" class="online">
+            ● BACKEND ONLINE
+        </div>
+
+    </header>
+
+
+    <div class="container">
+
+        <div class="worker">
+            Worker ID: <strong id="worker">W001</strong>
+        </div>
+
+
+        <div class="main-grid">
+
+            <!-- H2S CARD -->
+
+            <div class="card">
+
+                <h3>Corrected H₂S Level</h3>
+
+                <div class="big-value">
+                    <span id="h2s">--</span>
+                    <small>ppm</small>
+                </div>
+
+            </div>
+
+
+            <!-- RISK CARD -->
+
+            <div class="card risk-card">
+
+                <h3>Current Risk Status</h3>
+
+                <div id="risk">
+                    --
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- SENSOR INFORMATION -->
+
+        <div class="details">
+
+            <div class="detail-card">
+
+                <p>NH₃ Channel</p>
+
+                <div class="small-value">
+                    <span id="nh3">--</span>
+                </div>
+
+            </div>
+
+
+            <div class="detail-card">
+
+                <p>Temperature</p>
+
+                <div class="small-value">
+                    <span id="temperature">--</span> °C
+                </div>
+
+            </div>
+
+
+            <div class="detail-card">
+
+                <p>Humidity</p>
+
+                <div class="small-value">
+                    <span id="humidity">--</span> %
+                </div>
+
+            </div>
+
+
+            <div class="detail-card">
+
+                <p>Cumulative Exposure</p>
+
+                <div class="small-value">
+                    <span id="exposure">--</span>
+                </div>
+
+                <small>ppm·h</small>
+
+            </div>
+
+        </div>
+
+
+        <!-- PROCESSING INFORMATION -->
+
+        <div class="status-box">
+
+            <h3>Processing Status</h3>
+
+            <p>
+                Local Risk Score:
+                <strong id="score">--</strong>
+            </p>
+
+            <p>
+                Monitoring:
+                <strong>Active</strong>
+            </p>
+
+            <p>
+                Data Source:
+                <strong>ESP32 / Wokwi Prototype</strong>
+            </p>
+
+        </div>
+
+    </div>
+
+
+    <script>
+
+        const API_URL =
+            "http://127.0.0.1:8000/latest";
+
+
+        async function updateDashboard() {
+
+            const connection =
+                document.getElementById("connection");
+
+            try {
+
+                // Ask FastAPI for latest reading
+                const response =
+                    await fetch(API_URL);
+
+                if (!response.ok) {
+                    throw new Error("Backend error");
+                }
+
+                const data =
+                    await response.json();
+
+
+                // -----------------------------------
+                // WORKER
+                // -----------------------------------
+
+                document.getElementById("worker")
+                    .innerText =
+                    data.worker_id || "W001";
+
+
+                // -----------------------------------
+                // H2S
+                // -----------------------------------
+
+                document.getElementById("h2s")
+                    .innerText =
+                    Number(data.h2s || 0).toFixed(2);
+
+
+                // -----------------------------------
+                // NH3
+                // -----------------------------------
+
+                document.getElementById("nh3")
+                    .innerText =
+                    Number(data.nh3 || 0).toFixed(2);
+
+
+                // -----------------------------------
+                // TEMPERATURE
+                // -----------------------------------
+
+                document.getElementById("temperature")
+                    .innerText =
+                    Number(data.temperature || 0).toFixed(1);
+
+
+                // -----------------------------------
+                // HUMIDITY
+                // -----------------------------------
+
+                document.getElementById("humidity")
+                    .innerText =
+                    Number(data.humidity || 0).toFixed(1);
+
+
+                // -----------------------------------
+                // EXPOSURE
+                // -----------------------------------
+
+                document.getElementById("exposure")
+                    .innerText =
+                    Number(
+                        data.cumulative_exposure || 0
+                    ).toFixed(4);
+
+
+                // -----------------------------------
+                // RISK SCORE
+                // -----------------------------------
+
+                document.getElementById("score")
+                    .innerText =
+                    Number(
+                        data.risk_score || 0
+                    ).toFixed(2);
+
+
+                // -----------------------------------
+                // STATUS
+                // -----------------------------------
+
+                const risk =
+                    data.local_status || "SAFE";
+
+                const riskElement =
+                    document.getElementById("risk");
+
+
+                riskElement.innerText = risk;
+
+                riskElement.className = "";
+
+
+                if (risk === "SAFE") {
+
+                    riskElement.classList.add("safe");
+
+                }
+
+                else if (risk === "WARNING") {
+
+                    riskElement.classList.add("warning");
+
+                }
+
+                else if (risk === "DANGER") {
+
+                    riskElement.classList.add("danger");
+
+                }
+
+
+                // Backend connection successful
+
+                connection.innerText =
+                    "● BACKEND ONLINE";
+
+                connection.className =
+                    "online";
+
+            }
+
+            catch (error) {
+
+                console.error(error);
+
+                connection.innerText =
+                    "● BACKEND OFFLINE";
+
+                connection.style.color =
+                    "#ef4444";
+
+            }
+
+        }
+
+
+        // Update dashboard every second
+
+        setInterval(
+            updateDashboard,
+            1000
+        );
+
+
+        // Run immediately
+
+        updateDashboard();
+
+    </script>
+
+</body>
+
+</html>
